@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mode Shift</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one working column. Song strip, then a From → To board, the degree ladder, and the player with its piano roll. */
+:root {
+  --bg: #eceef3;
+  --surface: #ffffff;
+  --surface-2: #f5f6f9;
+  --ink: #161a25;
+  --muted: #5b6377;
+  --line: #d4d8e1;
+  --accent: #3343d1;        /* the target mode, shifted notes */
+  --accent-ink: #ffffff;
+  --accent-soft: #e3e6fb;
+  --warm: #b8780b;          /* the source mode, original pitches */
+  --warm-soft: #f6ead2;
+  --note: #8a92a6;
+  --row-in: rgba(51, 67, 209, 0.055);
+  --row-tonic: rgba(51, 67, 209, 0.13);
+  --danger: #b42318;
+  --font-display: "Bricolage Grotesque", "Avenir Next", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --radius: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0e1118; --surface: #161a24; --surface-2: #1c2130; --ink: #e5e8f0; --muted: #959db0; --line: #2a3142;
+    --accent: #8c9bff; --accent-ink: #0e1118; --accent-soft: #232a4d; --warm: #eab54f; --warm-soft: #3a2f17;
+    --note: #6c7489; --row-in: rgba(140, 155, 255, 0.06); --row-tonic: rgba(140, 155, 255, 0.15); --danger: #ff8a7a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0e1118; --surface: #161a24; --surface-2: #1c2130; --ink: #e5e8f0; --muted: #959db0; --line: #2a3142;
+  --accent: #8c9bff; --accent-ink: #0e1118; --accent-soft: #232a4d; --warm: #eab54f; --warm-soft: #3a2f17;
+  --note: #6c7489; --row-in: rgba(140, 155, 255, 0.06); --row-tonic: rgba(140, 155, 255, 0.15); --danger: #ff8a7a;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.5 var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+[hidden] { display: none !important; }
+.wrap {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid;
+  gap: 18px;
+}
+h1, h2, h3 { font-family: var(--font-display); margin: 0; text-wrap: balance; }
+button, select, input { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* header */
+.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+.brand h1 { font-size: clamp(30px, 5vw, 44px); font-weight: 700; letter-spacing: -0.02em; line-height: 1; }
+.brand h1 span { color: var(--accent); }
+.brand p { margin: 6px 0 0; color: var(--muted); }
+.actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 9px 14px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface); cursor: pointer; font-weight: 500; white-space: nowrap;
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover { filter: brightness(1.08); }
+.btn:disabled { opacity: 0.5; cursor: default; }
+
+/* song strip */
+.song {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px;
+  padding: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.song h2 { font-size: 20px; font-weight: 500; min-width: 0; overflow-wrap: anywhere; }
+.song .meta { color: var(--muted); font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; padding: 2px 7px; border-radius: 99px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.message { color: var(--danger); font-weight: 500; width: 100%; }
+
+/* from -> to board */
+.board {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.6fr); gap: 0;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+}
+.side { padding: 18px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.side h3 { font-size: 13px; font-family: var(--font-mono); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+.from h3 { color: var(--warm); }
+.to h3 { color: var(--accent); }
+.arrow { display: grid; place-items: center; padding: 0 4px; color: var(--muted); font-size: 26px; border-inline: 1px dashed var(--line); }
+.keypick { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.keypick label { font-size: 13px; color: var(--muted); }
+select {
+  padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2);
+  font-weight: 500; max-width: 100%;
+}
+.keyname { font-family: var(--font-display); font-size: 28px; font-weight: 700; line-height: 1.1; letter-spacing: -0.01em; }
+.from .keyname { color: var(--warm); }
+.to .keyname { color: var(--accent); }
+.hint { font-size: 13px; color: var(--muted); margin: 0; }
+.where { font-size: 13px; color: var(--muted); margin: 2px 0 0; font-family: var(--font-body); font-weight: 400; font-variant-numeric: tabular-nums; }
+.ladder-head h3 .where { margin-left: 6px; }
+.sections { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.section { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; padding: 4px; border-radius: 9px; border: 1px solid transparent; }
+.section select:last-child { width: 100%; }
+.section.current { border-color: var(--warm); background: var(--warm-soft); }
+.section .when {
+  font-family: var(--font-mono); font-size: 12.5px; font-variant-numeric: tabular-nums; text-align: left;
+  background: none; border: 0; padding: 6px 4px; cursor: pointer; color: var(--muted); border-radius: 6px;
+}
+.section .when:hover { color: var(--ink); text-decoration: underline; }
+.section.current .when { color: var(--ink); font-weight: 600; }
+.section select { padding: 6px 8px; font-size: 14px; }
+.guesses { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip {
+  border: 1px solid var(--line); background: var(--surface-2); border-radius: 99px; padding: 3px 10px;
+  font-size: 13px; cursor: pointer;
+}
+.chip:hover { border-color: var(--warm); }
+.chip[aria-pressed="true"] { background: var(--warm-soft); border-color: var(--warm); color: var(--ink); font-weight: 600; }
+
+.modes { display: grid; gap: 10px; }
+.modegroup { display: grid; gap: 6px; }
+.modegroup .label { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.modelist { display: flex; flex-wrap: wrap; gap: 6px; }
+.mode input { position: absolute; opacity: 0; pointer-events: none; }
+.mode span {
+  display: inline-block; padding: 6px 11px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--surface-2); cursor: pointer; font-weight: 500; font-size: 14px;
+}
+.mode span small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.mode span:hover { border-color: var(--accent); }
+.mode input:checked + span { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.mode input:checked + span small { color: inherit; opacity: 0.8; }
+.mode input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mode.same span { border-style: dashed; }
+
+/* degree ladder */
+.ladder { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 12px; }
+.ladder-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px 16px; }
+.ladder-head h3 { font-size: 17px; font-weight: 500; }
+.ladder-head p { margin: 0; color: var(--muted); font-size: 14px; }
+.ladder-head strong { color: var(--ink); font-variant-numeric: tabular-nums; }
+.degrees { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.deg {
+  display: grid; grid-template-rows: auto auto auto; justify-items: center; gap: 2px;
+  padding: 8px 4px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface-2);
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: center; min-width: 0;
+}
+.deg .num { font-size: 15px; font-weight: 600; }
+.deg .nm { font-size: 12px; color: var(--muted); }
+.deg .src .num { color: var(--warm); }
+.deg .mid { font-size: 12px; color: var(--muted); line-height: 1; }
+.deg .tgt .num { color: var(--accent); }
+.deg.changed { background: var(--accent-soft); border-color: var(--accent); }
+.deg.changed .mid { color: var(--accent); font-weight: 600; }
+.optrow { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 14px; color: var(--muted); }
+
+/* player */
+.player { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.transport { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.play { width: 44px; height: 44px; border-radius: 50%; padding: 0; justify-content: center; }
+.play svg { width: 18px; height: 18px; fill: currentColor; }
+.time { font-family: var(--font-mono); font-size: 13px; font-variant-numeric: tabular-nums; color: var(--muted); min-width: 92px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface-2); padding: 8px 12px; cursor: pointer; font-weight: 500; font-size: 14px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"].orig { background: var(--warm); color: var(--surface); }
+.seg button[aria-pressed="true"].shifted { background: var(--accent); color: var(--accent-ink); }
+.field { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.field input[type="range"] { width: 110px; accent-color: var(--accent); }
+.field output { font-family: var(--font-mono); font-variant-numeric: tabular-nums; min-width: 38px; color: var(--ink); }
+.spacer { flex: 1; }
+.sound-status { padding: 8px 14px; font-size: 12.5px; color: var(--muted); border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.sound-status .ok { color: var(--ink); }
+.sound-status .err { color: var(--danger); }
+.roll-wrap { position: relative; }
+#roll { display: block; width: 100%; height: 340px; cursor: pointer; touch-action: pan-y; }
+#overview { display: block; width: 100%; height: 38px; border-top: 1px solid var(--line); cursor: pointer; touch-action: none; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; padding: 10px 14px; font-size: 12.5px; color: var(--muted); border-top: 1px solid var(--line); }
+.legend i { display: inline-block; width: 18px; height: 8px; border-radius: 2px; vertical-align: middle; margin-right: 6px; }
+.legend .l-note { background: var(--note); }
+.legend .l-shift { background: var(--accent); }
+.legend .l-orig { border: 1.5px dashed var(--warm); }
+.legend .l-scale { background: var(--row-tonic); border: 1px solid var(--line); }
+
+.drop {
+  position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--bg) 82%, transparent); backdrop-filter: blur(3px);
+  font-family: var(--font-display); font-size: 28px; color: var(--accent);
+  border: 3px dashed var(--accent);
+}
+footer { color: var(--muted); font-size: 13px; }
+footer p { margin: 0; max-width: 70ch; }
+
+@media (max-width: 760px) {
+  .board { grid-template-columns: minmax(0, 1fr); }
+  .arrow { display: none; }
+  .from { border-bottom: 1px dashed var(--line); }
+  #roll { height: 260px; }
+  .degrees { gap: 4px; }
+  .deg .nm { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <h1>Mode<span>·</span>Shift</h1>
+      <p>Load a MIDI file, pick a new mode, hear the same music in a different color.</p>
+    </div>
+    <div class="actions">
+      <label class="btn primary" for="file">Open MIDI file…</label>
+      <input type="file" id="file" accept=".mid,.midi,.kar,.rmi,audio/midi,audio/x-midi" hidden>
+      <button class="btn" id="demo" type="button">Load demo tune</button>
+    </div>
+  </header>
+
+  <section class="song" aria-live="polite">
+    <h2 id="songName">No file loaded</h2>
+    <span class="tag" id="demoTag" hidden>Demo</span>
+    <span class="meta" id="songMeta"></span>
+    <div class="message" id="message" hidden></div>
+  </section>
+
+  <section class="board">
+    <div class="side from">
+      <h3>From</h3>
+      <div>
+        <div class="keyname" id="srcName">–</div>
+        <p class="where" id="srcWhere"></p>
+      </div>
+      <div class="keypick">
+        <label for="followChanges">Key changes</label>
+        <select id="followChanges">
+          <option value="yes">Follow key changes</option>
+          <option value="no">One key for the whole piece</option>
+        </select>
+      </div>
+      <ol class="sections" id="sections"></ol>
+      <p class="hint">Detected from the notes. If a key is off, set it by hand or pick another guess for the current section:</p>
+      <div class="guesses" id="guesses"></div>
+    </div>
+    <div class="arrow" aria-hidden="true">→</div>
+    <div class="side to">
+      <h3>To</h3>
+      <div>
+        <div class="keyname" id="tgtName">–</div>
+        <p class="where" id="tgtWhere"></p>
+      </div>
+      <div class="keypick">
+        <label for="tgtTonic">Tonic</label>
+        <select id="tgtTonic"></select>
+      </div>
+      <div class="modes" id="tgtModes" role="radiogroup" aria-label="Target mode"></div>
+    </div>
+  </section>
+
+  <section class="ladder">
+    <div class="ladder-head">
+      <h3>Scale degrees <span class="where" id="ladderWhere"></span></h3>
+      <p id="changeSummary"></p>
+    </div>
+    <div class="degrees" id="degrees"></div>
+    <div class="optrow">
+      <label for="policy">Notes outside the source scale</label>
+      <select id="policy">
+        <option value="keep">Keep as written</option>
+        <option value="below">Move with the degree below</option>
+        <option value="above">Move with the degree above</option>
+      </select>
+      <span>Drums (channel 10) are never shifted.</span>
+    </div>
+  </section>
+
+  <section class="player">
+    <div class="transport">
+      <button class="btn primary play" id="play" type="button" aria-label="Play" disabled>
+        <svg viewBox="0 0 24 24" id="playIcon"><path d="M7 4.5v15l13-7.5z"/></svg>
+      </button>
+      <button class="btn" id="rewind" type="button" aria-label="Back to start" disabled>⏮</button>
+      <span class="time" id="time">0:00 / 0:00</span>
+      <div class="seg" role="group" aria-label="Listen to">
+        <button type="button" class="orig" id="listenOrig" aria-pressed="false">Original</button>
+        <button type="button" class="shifted" id="listenShifted" aria-pressed="true">Shifted</button>
+      </div>
+      <label class="field" for="speed">Speed <input type="range" id="speed" min="50" max="150" step="5" value="100"><output id="speedOut">100%</output></label>
+      <label class="field" for="sound">Sound
+        <select id="sound">
+          <option value="sampled">Sampled instruments</option>
+          <option value="synth">Simple synth</option>
+        </select>
+      </label>
+      <span class="spacer"></span>
+      <button class="btn" id="download" type="button" disabled>Download shifted MIDI</button>
+    </div>
+    <div class="sound-status" id="soundStatus" hidden></div>
+    <div class="roll-wrap">
+      <canvas id="roll" aria-label="Piano roll. Click to jump to a point in the song."></canvas>
+      <canvas id="overview" aria-label="Whole song overview. Click or drag to seek."></canvas>
+    </div>
+    <div class="legend">
+      <span><i class="l-note"></i>Unchanged note</span>
+      <span><i class="l-shift"></i>Shifted note</span>
+      <span><i class="l-orig"></i>Where it was</span>
+      <span><i class="l-scale"></i>Rows in the scale (darker: tonic)</span>
+      <span>Space: play/pause · A: toggle original/shifted</span>
+    </div>
+  </section>
+
+  <footer>
+    <p>Each note keeps its scale degree: the 3rd of the old mode becomes the 3rd of the new one. Instrument samples are the FluidR3 General MIDI set, loaded from gleitz.github.io; without a connection the simple synth plays instead.</p>
+  </footer>
+</div>
+<div class="drop" id="drop" hidden>Drop a MIDI file to load it</div>
+
+<script src="modeshift.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
